@@ -4,7 +4,7 @@ on:
   push:
     # Publish `master` as Docker `latest` image.
     branches:
-      - master
+      - "*"
 
     # Publish `v1.2.3` tags as releases.
     tags:
@@ -36,7 +36,7 @@ jobs:
 
       - name: Push image
         run: |
-          IMAGE_ID=${{ github.repository }}/$IMAGE_NAME
+          IMAGE_ID=${{ github.repository }}
 
           # Strip git ref prefix from version
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
