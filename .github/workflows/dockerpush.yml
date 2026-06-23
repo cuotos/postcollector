@@ -2,11 +2,11 @@ name: Docker
 
 on:
   push:
-    # Publish `master` as Docker `latest` image.
+    # Commits on main are published tagged with the commit SHA.
     branches:
-      - "*"
+      - main
 
-    # Publish `v1.2.3` tags as releases.
+    # `v1.2.3` tags are published as releases (tagged `latest` and the git tag).
     tags:
       - v*
 
@@ -54,17 +54,20 @@ jobs:
         run: |
           IMAGE_ID=${{ github.repository }}
 
-          # Strip git ref prefix from version
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+          if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
+            # Release: tag the image with the git tag and `latest`.
+            GIT_TAG=${{ github.ref_name }}
+            echo "Releasing $IMAGE_ID with tags: $GIT_TAG, latest"
 
-          # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+            docker tag image $IMAGE_ID:$GIT_TAG
+            docker tag image $IMAGE_ID:latest
+            docker push $IMAGE_ID:$GIT_TAG
+            docker push $IMAGE_ID:latest
+          else
+            # Commit on main: tag the image with the commit SHA.
+            SHA=${{ github.sha }}
+            echo "Publishing $IMAGE_ID:$SHA"
 
-          # Use Docker `latest` tag convention
-          [ "$VERSION" == "master" ] && VERSION=latest
-
-          echo IMAGE_ID=$IMAGE_ID
-          echo VERSION=$VERSION
-
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
+            docker tag image $IMAGE_ID:$SHA
+            docker push $IMAGE_ID:$SHA
+          fi
