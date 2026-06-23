@@ -2,7 +2,7 @@ name: Docker
 
 on:
   push:
-    # Commits on main are published tagged with the commit SHA.
+    # Commits on main are published tagged with the commit SHA and `latest`.
     branches:
       - main
 
@@ -64,10 +64,12 @@ jobs:
             docker push $IMAGE_ID:$GIT_TAG
             docker push $IMAGE_ID:latest
           else
-            # Commit on main: tag the image with the commit SHA.
+            # Commit on main: tag the image with the commit SHA and `latest`.
             SHA=${{ github.sha }}
-            echo "Publishing $IMAGE_ID:$SHA"
+            echo "Publishing $IMAGE_ID with tags: $SHA, latest"
 
             docker tag image $IMAGE_ID:$SHA
+            docker tag image $IMAGE_ID:latest
             docker push $IMAGE_ID:$SHA
+            docker push $IMAGE_ID:latest
           fi
