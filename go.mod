@@ -1,8 +1,5 @@
 module postCollector
 
-go 1.13
+go 1.26
 
-require (
-	github.com/gorilla/mux v1.7.4
-	github.com/stretchr/testify v1.6.0
-)
+require github.com/gorilla/mux v1.8.1
