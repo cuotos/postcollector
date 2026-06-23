@@ -18,10 +18,12 @@ env:
   IMAGE_NAME: image
 
 jobs:
-  # Run tests for every push and pull request.
+  # Run tests for pull requests and commits on main. Tags are skipped: the
+  # commit a tag points at was already tested when it landed on main.
   test:
 
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
     steps:
       - uses: actions/checkout@v5
@@ -33,13 +35,13 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-  # Push image to GitHub Package Registry.
-  # See also https://docs.docker.com/docker-hub/builds/
+  # Build and publish the image for commits on main, tagged with the commit
+  # SHA and `edge`.
   push:
 
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v5
@@ -53,23 +55,34 @@ jobs:
       - name: Push image
         run: |
           IMAGE_ID=${{ github.repository }}
+          SHA=${{ github.sha }}
+          echo "Publishing $IMAGE_ID with tags: $SHA, edge"
 
-          if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
-            # Release: tag the image with the git tag and `latest`.
-            GIT_TAG=${{ github.ref_name }}
-            echo "Releasing $IMAGE_ID with tags: $GIT_TAG, latest"
+          docker tag image $IMAGE_ID:$SHA
+          docker tag image $IMAGE_ID:edge
+          docker push $IMAGE_ID:$SHA
+          docker push $IMAGE_ID:edge
 
-            docker tag image $IMAGE_ID:$GIT_TAG
-            docker tag image $IMAGE_ID:latest
-            docker push $IMAGE_ID:$GIT_TAG
-            docker push $IMAGE_ID:latest
-          else
-            # Commit on main: tag the image with the commit SHA and `edge`.
-            SHA=${{ github.sha }}
-            echo "Publishing $IMAGE_ID with tags: $SHA, edge"
+  # Release a `v*` tag by adding `latest` and the git tag to the EXISTING
+  # image already built for the tagged commit (found by its SHA). The image
+  # is not rebuilt — tags are added to the registry manifest directly.
+  release:
 
-            docker tag image $IMAGE_ID:$SHA
-            docker tag image $IMAGE_ID:edge
-            docker push $IMAGE_ID:$SHA
-            docker push $IMAGE_ID:edge
-          fi
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Log into registry
+        run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ github.actor }} --password-stdin
+
+      - name: Add release tags to existing image
+        run: |
+          IMAGE_ID=${{ github.repository }}
+          SHA=${{ github.sha }}
+          GIT_TAG=${{ github.ref_name }}
+          echo "Tagging existing image $IMAGE_ID:$SHA as $GIT_TAG and latest"
+
+          docker buildx imagetools create \
+            --tag $IMAGE_ID:$GIT_TAG \
+            --tag $IMAGE_ID:latest \
+            $IMAGE_ID:$SHA
